@@ -89,8 +89,8 @@ async function callGenerateContent(model, system, user, key) {
   return extractText(await r.json());
 }
 
-/** @returns {Promise<string>} готовый текст */
-export async function geminiFix(payload, key) {
+/** @returns {Promise<string>} ответ модели: готовый текст или реплика соавтора */
+export async function geminiAsk(payload, key) {
   const { system, user } = buildPrompt(payload);
   const model = await pickModel(key);
 

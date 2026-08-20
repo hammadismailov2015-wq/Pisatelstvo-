@@ -36,6 +36,7 @@
   <div class="tools">
     <button id="copyBtn" class="tool">Копировать</button>
     <button id="shareBtn" class="tool" hidden>Поделиться</button>
+    <button id="coauthorBtn" class="tool accent">Соавтор</button>
     <button id="polishBtn" class="tool">Причесать всё</button>
     <button id="undoBtn" class="tool" disabled>Отменить</button>
     <button id="clearBtn" class="tool danger">Очистить</button>
@@ -53,6 +54,31 @@
   </button>
   <div id="micLabel" class="mic-label">Нажми и говори</div>
 </footer>
+
+<dialog id="coauthor" class="sheet">
+  <div class="sheet-head">
+    <h2>Соавтор</h2>
+    <button id="coClose" class="icon-btn" aria-label="Закрыть">✕</button>
+  </div>
+
+  <p class="note">Читает твой текст и отвечает по делу. Хвалить не будет.</p>
+
+  <div class="chips" id="coChips">
+    <button type="button" data-kind="ideas">Идеи, что дальше</button>
+    <button type="button" data-kind="critique">Что не так</button>
+    <button type="button" data-kind="continue">Продолжи за меня</button>
+    <button type="button" data-kind="hole">Где дыры</button>
+  </div>
+
+  <div id="coAnswer" class="co-answer"></div>
+  <div id="coVariants" class="co-variants"></div>
+
+  <form id="coForm" class="co-ask">
+    <input id="coQuestion" type="text" placeholder="Спросить своими словами…" autocomplete="off" />
+    <button type="button" id="coMic" class="icon-btn" aria-label="Спросить голосом" title="Спросить голосом">🎤</button>
+    <button type="submit" class="icon-btn primary" aria-label="Отправить">→</button>
+  </form>
+</dialog>
 
 <dialog id="settings">
   <form method="dialog" class="settings-form">

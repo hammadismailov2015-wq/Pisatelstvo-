@@ -1,5 +1,5 @@
 import { buildPrompt, MODEL, MAX_TOKENS, STYLES } from "./prompt.js";
-import { geminiFix, forgetModel } from "./gemini.js";
+import { geminiAsk, forgetModel } from "./gemini.js";
 
 const $ = (id) => document.getElementById(id);
 const el = {
@@ -11,6 +11,9 @@ const el = {
   accessCode: $("accessCode"), codeField: $("codeField"), keyBlock: $("keyBlock"),
   geminiKey: $("geminiKey"),
   copy: $("copyBtn"), share: $("shareBtn"), polish: $("polishBtn"),
+  coauthorBtn: $("coauthorBtn"), coauthor: $("coauthor"), coClose: $("coClose"),
+  coChips: $("coChips"), coAnswer: $("coAnswer"), coVariants: $("coVariants"),
+  coForm: $("coForm"), coQuestion: $("coQuestion"), coMic: $("coMic"),
   undo: $("undoBtn"), clear: $("clearBtn"),
 };
 
@@ -118,7 +121,7 @@ async function askAI(payload) {
   }
 
   if (!settings.apiKey && settings.geminiKey) {
-    return geminiFix(body, settings.geminiKey);
+    return geminiAsk(body, settings.geminiKey);
   }
 
   const { system, user } = buildPrompt(body);
@@ -148,6 +151,7 @@ async function askAI(payload) {
     throw new Error(msg || `Ошибка ИИ (${r.status}).`);
   }
   if (j.stop_reason === "refusal") {
+    if (payload.mode === "coauthor") throw new Error("Модель отказалась отвечать на этот запрос.");
     say("Модель отказалась править этот фрагмент — оставил как есть.");
     return payload.raw;
   }
@@ -461,6 +465,133 @@ el.settings.addEventListener("close", () => {
   if (wasListening) { stopListening(); startListening(); }
   say("Настройки сохранены.");
 });
+
+// ---------- соавтор ----------
+
+let coBusy = false;
+let coRecog = null;
+
+function coSay(text, waiting = false) {
+  el.coAnswer.textContent = text;
+  el.coAnswer.classList.toggle("waiting", waiting);
+}
+
+function renderVariants(list) {
+  el.coVariants.textContent = "";
+  for (const variant of list) {
+    const box = document.createElement("div");
+    box.className = "co-variant";
+    box.textContent = variant;
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.textContent = "Вставить в текст";
+    btn.addEventListener("click", () => {
+      appendText(variant);
+      el.coauthor.close();
+      say("Вставил в текст. Не понравится — «Отменить».");
+    });
+    box.append(btn);
+    el.coVariants.append(box);
+  }
+}
+
+async function runCoauthor(kind, question) {
+  if (coBusy) return;
+  if (!aiReady()) {
+    coSay("Соавтору нужен ключ — бесплатный вводится в настройках (⚙).");
+    return;
+  }
+
+  coBusy = true;
+  el.coVariants.textContent = "";
+  coSay("Читаю…", true);
+  setStatus();
+
+  try {
+    const answer = await askAI({
+      mode: "coauthor",
+      raw: el.text.value,
+      kind: kind || undefined,
+      request: question || undefined,
+    });
+
+    const parts = String(answer || "")
+      .split(/^\s*-{3,}\s*$/m)
+      .map((x) => x.trim())
+      .filter(Boolean);
+
+    if (kind === "continue" && parts.length) {
+      coSay(parts.length > 1 ? "Два варианта продолжения:" : "Вариант продолжения:");
+      renderVariants(parts);
+    } else if (parts.length) {
+      coSay(parts.join("\n\n"));
+    } else {
+      coSay("Соавтор промолчал. Попробуй спросить иначе.");
+    }
+  } catch (e) {
+    coSay(e.message || "Не получилось спросить соавтора.");
+  } finally {
+    coBusy = false;
+    el.coQuestion.value = "";
+    setStatus();
+  }
+}
+
+function dictateQuestion() {
+  if (!SR) return coSay("Этот браузер не умеет распознавать речь — вопрос придётся набрать.");
+  if (coRecog) {
+    try { coRecog.stop(); } catch { /* уже остановлен */ }
+    return;
+  }
+  if (listening) stopListening();
+
+  const r = new SR();
+  r.lang = settings.lang;
+  r.continuous = false;
+  r.interimResults = true;
+
+  r.onresult = (event) => {
+    let text = "";
+    for (const res of event.results) text += res[0].transcript;
+    el.coQuestion.value = text.trim();
+  };
+  r.onerror = () => coSay("Микрофон не отозвался. Нажми ещё раз или набери вопрос.");
+  r.onend = () => {
+    coRecog = null;
+    el.coMic.classList.remove("on");
+    const question = el.coQuestion.value.trim();
+    if (question) runCoauthor(null, question);
+  };
+
+  coRecog = r;
+  el.coMic.classList.add("on");
+  coSay("Слушаю вопрос…", true);
+  try { r.start(); } catch { coRecog = null; el.coMic.classList.remove("on"); }
+}
+
+el.coauthorBtn.addEventListener("click", () => {
+  if (listening) stopListening();
+  el.coVariants.textContent = "";
+  coSay(el.text.value.trim()
+    ? "Выбери, что сделать, или спроси своими словами — голосом тоже можно."
+    : "Текста пока нет. Наговори хоть пару фраз, и будет о чём говорить.");
+  el.coauthor.showModal();
+});
+
+el.coClose.addEventListener("click", () => el.coauthor.close());
+
+el.coChips.addEventListener("click", (e) => {
+  const kind = e.target?.dataset?.kind;
+  if (kind) runCoauthor(kind, "");
+});
+
+el.coForm.addEventListener("submit", (e) => {
+  e.preventDefault();
+  const question = el.coQuestion.value.trim();
+  if (question) runCoauthor(null, question);
+});
+
+el.coMic.addEventListener("click", dictateQuestion);
 
 document.addEventListener("visibilitychange", () => {
   if (document.hidden && listening) flushBuffer();
