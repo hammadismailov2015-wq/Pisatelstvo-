@@ -247,9 +247,27 @@ function dropRepeats(text) {
   return out.join("").trim();
 }
 
+// Что и когда дописали последним — чтобы узнать в новом куске ту же самую фразу.
+let lastAppended = { text: "", at: 0 };
+
 function appendText(chunk) {
   let piece = dropRepeats(applyDict(chunk.trim()));
-  piece = stripOverlap(el.text.value, piece).trim();
+  const before = el.text.value;
+
+  // Телефон дослышал фразу целиком уже после того, как её начало ушло в текст:
+  // не дописываем второй раз, а заменяем начало полной фразой.
+  const fresh = lastAppended.text && Date.now() - lastAppended.at < 8000 && before.endsWith(lastAppended.text);
+  if (fresh && words(piece).length > words(lastAppended.text).length && startsWith(words(piece), words(lastAppended.text))) {
+    pushUndo();
+    el.text.value = before.slice(0, before.length - lastAppended.text.length) + piece;
+    lastAppended = { text: piece, at: Date.now() };
+    noteOwnChange();
+    saveText();
+    el.text.scrollTop = el.text.scrollHeight;
+    return;
+  }
+
+  piece = stripOverlap(before, piece).trim();
   if (!piece) return;
   const cur = el.text.value;
   // После среза повтора кусок может начаться с маленькой буквы посреди новой фразы.
@@ -258,6 +276,7 @@ function appendText(chunk) {
   pushUndo();
   const sep = !cur || /\n$/.test(cur) ? "" : " ";
   el.text.value = (cur + sep + piece).replace(/[ \t]+\n/g, "\n");
+  lastAppended = { text: piece, at: Date.now() };
   noteOwnChange();
   saveText();
   el.text.scrollTop = el.text.scrollHeight;
@@ -314,11 +333,36 @@ function resetRecognitionState() {
   flushedUpTo = -1;
 }
 
+const words = (t) => t.split(/\s+/).map(normWord).filter(Boolean);
+const startsWith = (long, short) => short.length > 0 && short.every((w, i) => w === long[i]);
+
+/**
+ * Некоторые телефоны присылают фразу заново на каждом слове: «Я», «Я тоже», «Я тоже пришёл».
+ * Такую фразу надо заменять предыдущей, а не дописывать к ней.
+ */
+function mergeSpeech(a, b) {
+  if (!a) return b;
+  if (!b) return a;
+  const an = words(a);
+  const bn = words(b);
+  if (startsWith(bn, an)) return b;   // b — та же фраза, дослышанная дальше
+  if (startsWith(an, bn)) return a;   // b — кусок того, что уже есть
+
+  const max = Math.min(an.length, bn.length, 14);
+  for (let n = max; n >= 2; n--) {
+    const before = an.slice(-n).join(" ");
+    if (before !== bn.slice(0, n).join(" ")) continue;
+    if (n < 3 && before.length < 8) continue;
+    return `${a} ${b.split(/\s+/).filter(Boolean).slice(n).join(" ")}`.trim();
+  }
+  return `${a} ${b}`;
+}
+
 function bufferFromFinals() {
   rawBuffer = [...finals.entries()]
     .sort((a, b) => a[0] - b[0])
     .map(([, t]) => t)
-    .join(" ")
+    .reduce((acc, t) => mergeSpeech(acc, t), "")
     .replace(/\s+/g, " ")
     .trim();
 }
