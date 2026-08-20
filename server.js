@@ -1,17 +1,13 @@
-// Говорилка — сервер: отдаёт статику из public/ и чинит распознанный текст через Claude API.
+// Говорилка — обычный сервер: отдаёт статику из public/ и правит текст ключом из окружения.
 import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import Anthropic from "@anthropic-ai/sdk";
-import { buildPrompt, MODEL, MAX_TOKENS } from "./public/prompt.js";
+import { fixText, hasServerKey, accessCodeOk, needsAccessCode, validate, errorFor, MODEL } from "./lib/ai.js";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = path.join(HERE, "public");
 const PORT = Number(process.env.PORT || 3000);
-const HAS_KEY = Boolean(process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN);
-
-const client = HAS_KEY ? new Anthropic() : null;
 
 const MIME = {
   ".html": "text/html; charset=utf-8",
@@ -51,71 +47,38 @@ function readBody(req, limit = 512 * 1024) {
   });
 }
 
-function textOf(message) {
-  return message.content
-    .filter((b) => b.type === "text")
-    .map((b) => b.text)
-    .join("")
-    .trim();
-}
-
-async function fix(payload) {
-  const { system, user } = buildPrompt(payload);
-  const message = await client.beta.messages.create({
-    model: MODEL,
-    max_tokens: MAX_TOKENS,
-    // Опус 5 сам решает, сколько думать; для правки речи хватает низкого усилия — так быстрее.
-    output_config: { effort: "low" },
-    // Если запрос вдруг отклонён классификатором — сервер сам переключится на запасную модель.
-    betas: ["server-side-fallback-2026-07-01"],
-    fallbacks: "default",
-    system: [{ type: "text", text: system, cache_control: { type: "ephemeral" } }],
-    messages: [{ role: "user", content: user }],
-  });
-
-  if (message.stop_reason === "refusal") {
-    const err = new Error("refusal");
-    err.code = "refusal";
-    throw err;
-  }
-  return textOf(message);
-}
-
 async function handleFix(req, res) {
-  if (!client) {
+  if (!hasServerKey()) {
     return sendJson(res, 503, {
       error: "no_key",
-      message: "На сервере нет ключа ANTHROPIC_API_KEY. Можно ввести свой ключ в настройках приложения.",
+      message: "На сервере нет ANTHROPIC_API_KEY. Можно ввести свой ключ в настройках приложения.",
     });
   }
+  if (!accessCodeOk(req.headers["x-access-code"])) {
+    return sendJson(res, 401, {
+      error: "need_code",
+      needsCode: needsAccessCode(),
+      message: "Нужен код доступа — введи его в настройках приложения.",
+    });
+  }
+
   let payload;
   try {
     payload = JSON.parse(await readBody(req));
   } catch {
     return sendJson(res, 400, { error: "bad_request", message: "Не смог разобрать запрос." });
   }
-  if (!payload || typeof payload.raw !== "string" || !payload.raw.trim()) {
-    return sendJson(res, 400, { error: "empty", message: "Пустой текст." });
-  }
+
+  const problem = validate(payload);
+  if (problem) return sendJson(res, 400, { error: "bad_request", message: problem });
 
   try {
-    const text = await fix(payload);
-    sendJson(res, 200, { text });
+    const { text, warning } = await fixText(payload);
+    sendJson(res, 200, warning ? { text, warning } : { text });
   } catch (e) {
-    if (e?.code === "refusal") {
-      return sendJson(res, 200, { text: payload.raw, warning: "Модель отказалась править этот фрагмент — оставил как есть." });
-    }
-    const status = e?.status;
-    const map = {
-      401: "Ключ не подошёл. Проверь ANTHROPIC_API_KEY.",
-      429: "Слишком много запросов подряд, попробуй через несколько секунд.",
-      529: "Сервис перегружен, попробуй ещё раз.",
-    };
     console.error("[fix]", e?.message || e);
-    sendJson(res, status && status < 500 ? status : 502, {
-      error: "api_error",
-      message: map[status] || "Не получилось связаться с ИИ. Текст сохранён как есть.",
-    });
+    const { status, message } = errorFor(e);
+    sendJson(res, status, { error: "api_error", message });
   }
 }
 
@@ -135,7 +98,12 @@ function serveStatic(req, res) {
 
 const server = http.createServer((req, res) => {
   if (req.url.startsWith("/api/health")) {
-    return sendJson(res, 200, { ok: true, serverKey: HAS_KEY, model: MODEL });
+    return sendJson(res, 200, {
+      ok: true,
+      serverKey: hasServerKey(),
+      needsCode: needsAccessCode(),
+      model: MODEL,
+    });
   }
   if (req.url.startsWith("/api/fix")) {
     if (req.method !== "POST") return sendJson(res, 405, { error: "method_not_allowed" });
@@ -146,7 +114,8 @@ const server = http.createServer((req, res) => {
 
 server.listen(PORT, () => {
   console.log(`Говорилка слушает http://localhost:${PORT}`);
-  if (!HAS_KEY) {
+  if (!hasServerKey()) {
     console.log("⚠  ANTHROPIC_API_KEY не задан — правка через ИИ будет работать только со своим ключом из настроек приложения.");
   }
+  if (needsAccessCode()) console.log("🔒 Вход по коду доступа (ACCESS_CODE).");
 });

@@ -80,7 +80,12 @@
       <span>Править на лету, пока говорю</span>
     </label>
 
-    <div class="key-block">
+    <label class="field" id="codeField" hidden>
+      <span>Код доступа <small>(его выдаёт владелец сервера)</small></span>
+      <input id="accessCode" type="password" placeholder="код" autocomplete="off" />
+    </label>
+
+    <div class="key-block" id="keyBlock">
       <div class="key-status" id="keyStatus"></div>
       <label class="field">
         <span>Свой ключ Claude API <small>(хранится только в этом браузере)</small></span>

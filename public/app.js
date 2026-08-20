@@ -7,6 +7,7 @@ const el = {
   style: $("style"), settings: $("settings"), settingsBtn: $("settingsBtn"),
   lang: $("lang"), instruction: $("instruction"), autoFix: $("autoFix"),
   apiKey: $("apiKey"), keyStatus: $("keyStatus"), saveSettings: $("saveSettings"),
+  accessCode: $("accessCode"), codeField: $("codeField"), keyBlock: $("keyBlock"),
   copy: $("copyBtn"), share: $("shareBtn"), polish: $("polishBtn"),
   undo: $("undoBtn"), clear: $("clearBtn"),
 };
@@ -15,7 +16,7 @@ const el = {
 
 const STORE = "govorilka.v1";
 const settings = Object.assign(
-  { lang: "ru-RU", style: "auto", instruction: "", autoFix: true, apiKey: "" },
+  { lang: "ru-RU", style: "auto", instruction: "", autoFix: true, apiKey: "", accessCode: "" },
   JSON.parse(localStorage.getItem(STORE + ".settings") || "{}")
 );
 
@@ -32,11 +33,13 @@ el.lang.value = settings.lang;
 el.instruction.value = settings.instruction;
 el.autoFix.checked = settings.autoFix;
 el.apiKey.value = settings.apiKey;
+el.accessCode.value = settings.accessCode;
 
 // ---------- связь с ИИ ----------
 
 let serverHasKey = false;
 let serverReachable = false;
+let serverNeedsCode = false;
 
 async function probeServer() {
   try {
@@ -45,9 +48,11 @@ async function probeServer() {
     const j = await r.json();
     serverReachable = true;
     serverHasKey = Boolean(j.serverKey);
+    serverNeedsCode = Boolean(j.needsCode);
   } catch {
     serverReachable = false;
     serverHasKey = false;
+    serverNeedsCode = false;
   }
   refreshKeyStatus();
   maybeOnboard();
@@ -57,17 +62,28 @@ function aiReady() {
   return serverHasKey || Boolean(settings.apiKey);
 }
 
-// Первый заход без ключа: сразу показываем настройки, чтобы не искать шестерёнку.
+// Сервер с ключом просит только код доступа (если он вообще настроен).
+function codeMissing() {
+  return serverHasKey && serverNeedsCode && !settings.accessCode;
+}
+
+// Первый заход, когда чего-то не хватает: сразу показываем настройки.
 function maybeOnboard() {
-  if (aiReady() || localStorage.getItem(STORE + ".onboarded")) return;
+  if ((aiReady() && !codeMissing()) || localStorage.getItem(STORE + ".onboarded")) return;
   localStorage.setItem(STORE + ".onboarded", "1");
   el.settings.showModal();
 }
 
 function refreshKeyStatus() {
+  el.codeField.hidden = !serverNeedsCode;
+  el.keyBlock.hidden = serverHasKey;
+
   if (serverHasKey) {
     el.keyStatus.textContent = "Ключ есть на сервере — всё работает, свой вводить не нужно.";
-  } else if (settings.apiKey) {
+    if (codeMissing()) say("Нужен код доступа — впиши его в настройках (⚙).", true);
+    return;
+  }
+  if (settings.apiKey) {
     el.keyStatus.textContent = "Работаем с твоим ключом из этого браузера.";
   } else {
     el.keyStatus.textContent = "Ключа нет: текст будет причёсываться простыми правилами, без ИИ.";
@@ -81,12 +97,16 @@ async function askAI(payload) {
   const body = { ...payload, style: settings.style, instruction: settings.instruction };
 
   if (serverHasKey) {
-    const r = await fetch("api/fix", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(body),
-    });
+    const headers = { "content-type": "application/json" };
+    if (settings.accessCode) headers["x-access-code"] = settings.accessCode;
+    const r = await fetch("api/fix", { method: "POST", headers, body: JSON.stringify(body) });
     const j = await r.json().catch(() => ({}));
+    if (r.status === 401 && j.error === "need_code") {
+      serverNeedsCode = true;
+      refreshKeyStatus();
+      el.settings.showModal();
+      throw new Error("Нужен код доступа — впиши его в настройках (⚙).");
+    }
     if (!r.ok) throw new Error(j.message || "Сервер не ответил.");
     if (j.warning) say(j.warning);
     return j.text;
@@ -423,6 +443,7 @@ el.settings.addEventListener("close", () => {
   settings.instruction = el.instruction.value.trim();
   settings.autoFix = el.autoFix.checked;
   settings.apiKey = el.apiKey.value.trim();
+  settings.accessCode = el.accessCode.value.trim();
   saveSettings();
   refreshKeyStatus();
   if (wasListening) { stopListening(); startListening(); }

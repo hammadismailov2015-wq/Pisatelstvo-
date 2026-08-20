@@ -1,0 +1,14 @@
+# Запасной вариант хостинга: Render (New → Blueprint → выбрать этот репозиторий).
+# Ключ вписывается в панели Render, в код он не попадает.
+services:
+  - type: web
+    name: govorilka
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: ANTHROPIC_API_KEY
+        sync: false      # значение вводится вручную в панели Render
+      - key: ACCESS_CODE
+        sync: false      # необязательно: код доступа для входа
