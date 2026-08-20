@@ -1,0 +1,17 @@
+{
+  "name": "govorilka",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Голосовой блокнот: говоришь — ИИ сам расставляет знаки и исправляет распознавание по контексту",
+  "scripts": {
+    "start": "node server.js",
+    "icons": "node tools/make-icons.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.71.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
