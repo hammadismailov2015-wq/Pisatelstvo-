@@ -1,5 +1,6 @@
 import { buildPrompt, MODEL, MAX_TOKENS, STYLES } from "./prompt.js";
 import { geminiAsk, forgetModel } from "./gemini.js";
+import { applyDict, learnFromEdit, dictSize, clearDict } from "./learn.js";
 
 const $ = (id) => document.getElementById(id);
 const el = {
@@ -14,6 +15,7 @@ const el = {
   coauthorBtn: $("coauthorBtn"), coauthor: $("coauthor"), coClose: $("coClose"),
   coChips: $("coChips"), coAnswer: $("coAnswer"), coVariants: $("coVariants"),
   coForm: $("coForm"), coQuestion: $("coQuestion"), coMic: $("coMic"),
+  dictLine: $("dictLine"), dictClear: $("dictClear"),
   undo: $("undoBtn"), clear: $("clearBtn"),
 };
 
@@ -194,6 +196,19 @@ function localFix(raw) {
 
 const undoStack = [];
 
+// Что мы показали последним: с этим сравниваем ручные правки, чтобы учиться на них.
+let lastSeenText = el.text.value;
+let learnTimer = null;
+
+function updateDictLine() {
+  const n = dictSize();
+  el.dictLine.textContent = n ? `Мои поправки: ${n}` : "Мои поправки: пока ни одной";
+}
+
+function noteOwnChange() {
+  lastSeenText = el.text.value;
+}
+
 function pushUndo() {
   undoStack.push(el.text.value);
   if (undoStack.length > 30) undoStack.shift();
@@ -233,7 +248,7 @@ function dropRepeats(text) {
 }
 
 function appendText(chunk) {
-  let piece = dropRepeats(chunk.trim());
+  let piece = dropRepeats(applyDict(chunk.trim()));
   piece = stripOverlap(el.text.value, piece).trim();
   if (!piece) return;
   const cur = el.text.value;
@@ -243,6 +258,7 @@ function appendText(chunk) {
   pushUndo();
   const sep = !cur || /\n$/.test(cur) ? "" : " ";
   el.text.value = (cur + sep + piece).replace(/[ \t]+\n/g, "\n");
+  noteOwnChange();
   saveText();
   el.text.scrollTop = el.text.scrollHeight;
 }
@@ -435,7 +451,27 @@ function updatePending() {
 
 el.mic.addEventListener("click", () => (listening ? stopListening() : startListening()));
 
-el.text.addEventListener("input", saveText);
+el.text.addEventListener("input", () => {
+  saveText();
+  // Ждём, пока человек допишет правку, и только потом запоминаем её.
+  clearTimeout(learnTimer);
+  learnTimer = setTimeout(() => {
+    const learned = learnFromEdit(lastSeenText, el.text.value);
+    lastSeenText = el.text.value;
+    if (learned) {
+      updateDictLine();
+      say(learned > 1 ? "Запомнил поправки — дальше исправлю сам." : "Запомнил поправку — дальше исправлю сам.");
+    }
+  }, 1400);
+});
+
+el.dictClear.addEventListener("click", () => {
+  if (!dictSize()) return;
+  if (!confirm("Забыть все запомненные поправки?")) return;
+  clearDict();
+  updateDictLine();
+  say("Забыл все поправки.");
+});
 
 el.style.addEventListener("change", () => {
   settings.style = el.style.value;
@@ -475,7 +511,8 @@ el.polish.addEventListener("click", async () => {
     const fixed = await askAI({ raw: text, mode: "full" });
     if (fixed) {
       pushUndo();
-      el.text.value = fixed;
+      el.text.value = applyDict(fixed);
+      noteOwnChange();
       saveText();
       say("Готово.");
     }
@@ -492,6 +529,7 @@ el.undo.addEventListener("click", () => {
   const prev = undoStack.pop();
   if (prev === undefined) return;
   el.text.value = prev;
+  noteOwnChange();
   saveText();
   el.undo.disabled = undoStack.length === 0;
   say("Вернул как было.");
@@ -502,6 +540,7 @@ el.clear.addEventListener("click", () => {
   if (!confirm("Очистить весь текст?")) return;
   pushUndo();
   el.text.value = "";
+  noteOwnChange();
   saveText();
   say("Пусто. Отменить можно кнопкой «Отменить».");
 });
@@ -663,6 +702,7 @@ window.addEventListener("beforeunload", saveText);
 
 probeServer();
 setStatus();
+updateDictLine();
 
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("sw.js").catch(() => {});

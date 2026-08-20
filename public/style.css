@@ -322,3 +322,16 @@ details[open] summary { color: var(--text); }
 .co-ask input { flex: 1; max-width: none; }
 .icon-btn.primary { background: var(--accent); color: #fff; }
 .icon-btn.on { background: var(--accent-2); color: #fff; }
+
+.row.space { justify-content: space-between; gap: 12px; }
+.row.space span { color: var(--muted); font-size: 14px; }
+button.ghost.small {
+  background: var(--panel-2);
+  color: var(--text);
+  border: none;
+  border-radius: 10px;
+  padding: 8px 12px;
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
