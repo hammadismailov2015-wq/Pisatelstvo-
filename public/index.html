@@ -87,11 +87,23 @@
 
     <div class="key-block" id="keyBlock">
       <div class="key-status" id="keyStatus"></div>
+
       <label class="field">
-        <span>Свой ключ Claude API <small>(хранится только в этом браузере)</small></span>
-        <input id="apiKey" type="password" placeholder="sk-ant-..." autocomplete="off" />
+        <span>Бесплатный ключ Google Gemini <small>(без карты)</small></span>
+        <input id="geminiKey" type="password" placeholder="AIza..." autocomplete="off" />
       </label>
-      <p class="note">Нужен, если приложение открыто без своего сервера. Ключ никуда не отправляется, кроме api.anthropic.com. Получить ключ: console.anthropic.com → API Keys.</p>
+      <p class="note">Самый простой способ включить ИИ: aistudio.google.com/apikey → «Create API key» → скопировать и вставить сюда. У Google есть бесплатный лимит; если он кончится, приложение скажет об этом и продолжит писать без ИИ.</p>
+
+      <details>
+        <summary>Есть платный ключ Claude API</summary>
+        <label class="field">
+          <span>Ключ Claude API</span>
+          <input id="apiKey" type="password" placeholder="sk-ant-..." autocomplete="off" />
+        </label>
+        <p class="note">Правит заметно лучше, но платно: console.anthropic.com → API Keys. Если заполнены оба ключа, используется этот.</p>
+      </details>
+
+      <p class="note">Ключи хранятся только в этом браузере и уходят только на сервер того сервиса, чей ключ введён.</p>
     </div>
 
     <menu>

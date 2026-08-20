@@ -1,6 +1,6 @@
 // Кэшируем оболочку приложения, чтобы оно открывалось и без сети.
-const CACHE = "govorilka-v1";
-const SHELL = ["./", "index.html", "style.css", "app.js", "prompt.js", "manifest.webmanifest", "icon.svg"];
+const CACHE = "govorilka-v2";
+const SHELL = ["./", "index.html", "style.css", "app.js", "prompt.js", "gemini.js", "manifest.webmanifest", "icon.svg"];
 
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));

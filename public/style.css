@@ -241,3 +241,11 @@ menu button {
   color: var(--text);
 }
 menu button.primary { background: var(--accent); color: #fff; }
+
+details { font-size: 15px; }
+details summary {
+  cursor: pointer;
+  padding: 8px 0;
+  color: var(--muted);
+}
+details[open] summary { color: var(--text); }

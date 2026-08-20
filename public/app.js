@@ -1,4 +1,5 @@
 import { buildPrompt, MODEL, MAX_TOKENS, STYLES } from "./prompt.js";
+import { geminiFix, forgetModel } from "./gemini.js";
 
 const $ = (id) => document.getElementById(id);
 const el = {
@@ -8,6 +9,7 @@ const el = {
   lang: $("lang"), instruction: $("instruction"), autoFix: $("autoFix"),
   apiKey: $("apiKey"), keyStatus: $("keyStatus"), saveSettings: $("saveSettings"),
   accessCode: $("accessCode"), codeField: $("codeField"), keyBlock: $("keyBlock"),
+  geminiKey: $("geminiKey"),
   copy: $("copyBtn"), share: $("shareBtn"), polish: $("polishBtn"),
   undo: $("undoBtn"), clear: $("clearBtn"),
 };
@@ -16,7 +18,7 @@ const el = {
 
 const STORE = "govorilka.v1";
 const settings = Object.assign(
-  { lang: "ru-RU", style: "auto", instruction: "", autoFix: true, apiKey: "", accessCode: "" },
+  { lang: "ru-RU", style: "auto", instruction: "", autoFix: true, apiKey: "", geminiKey: "", accessCode: "" },
   JSON.parse(localStorage.getItem(STORE + ".settings") || "{}")
 );
 
@@ -34,6 +36,7 @@ el.instruction.value = settings.instruction;
 el.autoFix.checked = settings.autoFix;
 el.apiKey.value = settings.apiKey;
 el.accessCode.value = settings.accessCode;
+el.geminiKey.value = settings.geminiKey;
 
 // ---------- связь с ИИ ----------
 
@@ -59,7 +62,7 @@ async function probeServer() {
 }
 
 function aiReady() {
-  return serverHasKey || Boolean(settings.apiKey);
+  return serverHasKey || Boolean(settings.apiKey) || Boolean(settings.geminiKey);
 }
 
 // Сервер с ключом просит только код доступа (если он вообще настроен).
@@ -84,12 +87,14 @@ function refreshKeyStatus() {
     return;
   }
   if (settings.apiKey) {
-    el.keyStatus.textContent = "Работаем с твоим ключом из этого браузера.";
+    el.keyStatus.textContent = "Работаем с твоим ключом Claude из этого браузера.";
+  } else if (settings.geminiKey) {
+    el.keyStatus.textContent = "Работаем с бесплатным ключом Google из этого браузера.";
   } else {
     el.keyStatus.textContent = "Ключа нет: текст будет причёсываться простыми правилами, без ИИ.";
   }
   if (!aiReady()) {
-    say("Без ключа ИИ не подключён — правлю только базовыми правилами. Ключ вводится в настройках (⚙).");
+    say("Без ключа ИИ не подключён — правлю только базовыми правилами. Бесплатный ключ Google вводится в настройках (⚙).");
   }
 }
 
@@ -110,6 +115,10 @@ async function askAI(payload) {
     if (!r.ok) throw new Error(j.message || "Сервер не ответил.");
     if (j.warning) say(j.warning);
     return j.text;
+  }
+
+  if (!settings.apiKey && settings.geminiKey) {
+    return geminiFix(body, settings.geminiKey);
   }
 
   const { system, user } = buildPrompt(body);
@@ -443,6 +452,9 @@ el.settings.addEventListener("close", () => {
   settings.instruction = el.instruction.value.trim();
   settings.autoFix = el.autoFix.checked;
   settings.apiKey = el.apiKey.value.trim();
+  const prevGemini = settings.geminiKey;
+  settings.geminiKey = el.geminiKey.value.trim();
+  if (settings.geminiKey !== prevGemini) forgetModel();
   settings.accessCode = el.accessCode.value.trim();
   saveSettings();
   refreshKeyStatus();
