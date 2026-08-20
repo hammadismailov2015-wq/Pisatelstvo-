@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Говорилка — пиши голосом</title>
+<meta name="description" content="Говоришь — ИИ сам расставляет знаки и правит распознавание по контексту." />
+<meta name="theme-color" content="#101014" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<link rel="manifest" href="manifest.webmanifest" />
+<link rel="icon" href="icon.svg" type="image/svg+xml" />
+<link rel="apple-touch-icon" href="icon-192.png" />
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<header class="top">
+  <div class="brand">
+    <span class="dot" id="statusDot" title="состояние"></span>
+    <h1>Говорилка</h1>
+  </div>
+  <div class="top-actions">
+    <select id="style" aria-label="Стиль текста"></select>
+    <button id="settingsBtn" class="icon-btn" aria-label="Настройки" title="Настройки">⚙</button>
+  </div>
+</header>
+
+<main>
+  <div class="editor-wrap">
+    <textarea id="text" placeholder="Нажми на микрофон и говори. Знаки препинания, заглавные буквы и опечатки распознавания ИИ поставит сам." spellcheck="true"></textarea>
+    <div id="pending" class="pending" hidden></div>
+  </div>
+
+  <div id="hint" class="hint"></div>
+
+  <div class="tools">
+    <button id="copyBtn" class="tool">Копировать</button>
+    <button id="shareBtn" class="tool" hidden>Поделиться</button>
+    <button id="polishBtn" class="tool">Причесать всё</button>
+    <button id="undoBtn" class="tool" disabled>Отменить</button>
+    <button id="clearBtn" class="tool danger">Очистить</button>
+  </div>
+</main>
+
+<footer class="mic-bar">
+  <div id="live" class="live"></div>
+  <button id="micBtn" class="mic" aria-label="Говорить">
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M12 15a3.5 3.5 0 0 0 3.5-3.5v-6a3.5 3.5 0 0 0-7 0v6A3.5 3.5 0 0 0 12 15Z"/>
+      <path d="M18.5 11.5a6.5 6.5 0 0 1-13 0" fill="none" stroke-width="2" stroke-linecap="round"/>
+      <path d="M12 18v3.2" fill="none" stroke-width="2" stroke-linecap="round"/>
+    </svg>
+  </button>
+  <div id="micLabel" class="mic-label">Нажми и говори</div>
+</footer>
+
+<dialog id="settings">
+  <form method="dialog" class="settings-form">
+    <h2>Настройки</h2>
+
+    <label class="field">
+      <span>Язык распознавания</span>
+      <select id="lang">
+        <option value="ru-RU">Русский</option>
+        <option value="en-US">English</option>
+        <option value="uk-UA">Українська</option>
+        <option value="kk-KZ">Қазақша</option>
+        <option value="de-DE">Deutsch</option>
+        <option value="es-ES">Español</option>
+      </select>
+    </label>
+
+    <label class="field">
+      <span>Постоянное указание ИИ <small>(необязательно)</small></span>
+      <input id="instruction" type="text" placeholder="например: пиши коротко и без смайликов" />
+    </label>
+
+    <label class="row">
+      <input id="autoFix" type="checkbox" checked />
+      <span>Править на лету, пока говорю</span>
+    </label>
+
+    <div class="key-block">
+      <div class="key-status" id="keyStatus"></div>
+      <label class="field">
+        <span>Свой ключ Claude API <small>(хранится только в этом браузере)</small></span>
+        <input id="apiKey" type="password" placeholder="sk-ant-..." autocomplete="off" />
+      </label>
+      <p class="note">Нужен, если приложение открыто без своего сервера. Ключ никуда не отправляется, кроме api.anthropic.com. Получить ключ: console.anthropic.com → API Keys.</p>
+    </div>
+
+    <menu>
+      <button value="save" id="saveSettings" class="primary">Сохранить</button>
+      <button value="cancel" class="ghost">Закрыть</button>
+    </menu>
+  </form>
+</dialog>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>

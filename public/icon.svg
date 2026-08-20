@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Говорилка">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#7c5cff"/>
+      <stop offset="1" stop-color="#ff5c8a"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#g)"/>
+  <g fill="none" stroke="#fff" stroke-width="30" stroke-linecap="round">
+    <rect x="211" y="112" width="90" height="170" rx="45" fill="#fff" stroke="none"/>
+    <path d="M156 262a100 100 0 0 0 200 0"/>
+    <path d="M256 362v50"/>
+    <path d="M196 412h120"/>
+  </g>
+</svg>
