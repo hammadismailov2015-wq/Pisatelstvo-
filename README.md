@@ -51,6 +51,20 @@ ANTHROPIC_API_KEY=sk-ant-... npm start
 > `http://`-адресу и телефон не даёт доступ к микрофону — выложи приложение на любой хостинг с https
 > (Vercel, Netlify, Cloudflare Pages, свой сервер) либо прокинь туннель (`cloudflared tunnel --url http://localhost:3000`).
 
+### Публичная ссылка (GitHub Pages)
+
+Приложение публикуется само при пуше в `main` — workflow `.github/workflows/pages.yml`.
+Один раз нужно включить Pages в репозитории:
+
+1. **Settings** → **Pages** → **Build and deployment** → **Source**: выбрать **GitHub Actions**.
+2. **Actions** → «Публикация на GitHub Pages» → **Run workflow** (или просто сделать любой пуш в `main`).
+
+Через пару минут сайт будет доступен по адресу
+`https://hammadismailov2015-wq.github.io/Pisatelstvo-/`.
+
+На Pages сервера нет, поэтому правку текста включает свой ключ Claude API, введённый
+в настройках приложения (⚙). Ключ хранится только в браузере того, кто его ввёл.
+
 ### Вариант без своего сервера
 
 Папку `public/` можно просто положить на любой статический хостинг с https — и открыть настройки (⚙),

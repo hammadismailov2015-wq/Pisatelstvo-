@@ -23,8 +23,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Если Pages ещё не включён в настройках репозитория, шаг не сработает —
+      # тогда включи вручную: Settings → Pages → Source: GitHub Actions.
       - name: Включить Pages
         uses: actions/configure-pages@v5
+        continue-on-error: true
         with:
           enablement: true
 

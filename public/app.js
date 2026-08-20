@@ -50,10 +50,18 @@ async function probeServer() {
     serverHasKey = false;
   }
   refreshKeyStatus();
+  maybeOnboard();
 }
 
 function aiReady() {
   return serverHasKey || Boolean(settings.apiKey);
+}
+
+// Первый заход без ключа: сразу показываем настройки, чтобы не искать шестерёнку.
+function maybeOnboard() {
+  if (aiReady() || localStorage.getItem(STORE + ".onboarded")) return;
+  localStorage.setItem(STORE + ".onboarded", "1");
+  el.settings.showModal();
 }
 
 function refreshKeyStatus() {
