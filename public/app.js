@@ -200,11 +200,47 @@ function pushUndo() {
   el.undo.disabled = false;
 }
 
+const normWord = (w) => w.toLowerCase().replace(/[^\p{L}\p{N}]/gu, "");
+
+/** Распознавание и модель иногда повторяют конец уже написанного — срезаем повтор. */
+function stripOverlap(existing, piece) {
+  const tail = existing.split(/\s+/).map(normWord).filter(Boolean).slice(-14);
+  const words = piece.split(/\s+/).filter(Boolean);
+  const norm = words.map(normWord);
+  const max = Math.min(tail.length, norm.length);
+  for (let n = max; n >= 2; n--) {
+    const before = tail.slice(-n).join(" ");
+    const after = norm.slice(0, n).join(" ");
+    if (before !== after) continue;
+    // Совпадение в два коротких слова («и в», «а то») — скорее совпадение, чем повтор.
+    if (n < 3 && before.length < 8) continue;
+    return words.slice(n).join(" ").replace(/^[\s,.;:—–-]+/, "");
+  }
+  return piece;
+}
+
+/** И внутри одного куска фраза иногда приходит дважды подряд. */
+function dropRepeats(text) {
+  const sentences = text.match(/[^.!?…]+[.!?…]*\s*/g) || [text];
+  const out = [];
+  for (const sentence of sentences) {
+    const key = sentence.split(/\s+/).map(normWord).filter(Boolean).join(" ");
+    const prev = out.length ? out[out.length - 1].split(/\s+/).map(normWord).filter(Boolean).join(" ") : "";
+    if (key && key === prev) continue;
+    out.push(sentence);
+  }
+  return out.join("").trim();
+}
+
 function appendText(chunk) {
-  const piece = chunk.trim();
+  let piece = dropRepeats(chunk.trim());
+  piece = stripOverlap(el.text.value, piece).trim();
   if (!piece) return;
-  pushUndo();
   const cur = el.text.value;
+  // После среза повтора кусок может начаться с маленькой буквы посреди новой фразы.
+  if (/[.!?…]\s*$/.test(cur)) piece = piece.replace(/^\p{Ll}/u, (c) => c.toUpperCase());
+
+  pushUndo();
   const sep = !cur || /\n$/.test(cur) ? "" : " ";
   el.text.value = (cur + sep + piece).replace(/[ \t]+\n/g, "\n");
   saveText();
@@ -252,6 +288,25 @@ let rawBuffer = "";
 let flushTimer = null;
 let wakeLock = null;
 
+// Браузер иногда присылает одну и ту же готовую фразу повторно, поэтому храним их
+// по номерам и помним, до какого номера уже отправили.
+let finals = new Map();
+let flushedUpTo = -1;
+
+function resetRecognitionState() {
+  finals.clear();
+  flushedUpTo = -1;
+}
+
+function bufferFromFinals() {
+  rawBuffer = [...finals.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .map(([, t]) => t)
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 if (!SR) {
   el.mic.disabled = true;
   el.micLabel.textContent = "Браузер не умеет распознавать речь";
@@ -262,6 +317,8 @@ function flushBuffer() {
   clearTimeout(flushTimer);
   flushTimer = null;
   const raw = rawBuffer.trim();
+  for (const i of finals.keys()) flushedUpTo = Math.max(flushedUpTo, i);
+  finals.clear();
   rawBuffer = "";
   if (raw) enqueue(raw);
   updatePending();
@@ -283,13 +340,14 @@ function createRecognition() {
     let interim = "";
     for (let i = event.resultIndex; i < event.results.length; i++) {
       const res = event.results[i];
-      const t = res[0].transcript;
-      if (res.isFinal) {
-        rawBuffer += (rawBuffer ? " " : "") + t.trim();
-      } else {
-        interim += t;
+      const t = res[0].transcript.trim();
+      if (!res.isFinal) {
+        interim += res[0].transcript;
+      } else if (i > flushedUpTo && t) {
+        finals.set(i, t);
       }
     }
+    bufferFromFinals();
     el.live.textContent = interim.trim();
     updatePending();
     // Длинную реплику отправляем, не дожидаясь паузы, чтобы текст не отставал.
@@ -309,7 +367,10 @@ function createRecognition() {
 
   r.onend = () => {
     // Мобильный Chrome обрывает распознавание после паузы — просто поднимаем заново.
+    // После перезапуска нумерация фраз начинается заново, поэтому забываем прежнюю.
     if (listening) {
+      flushBuffer();
+      resetRecognitionState();
       try { r.start(); } catch { setTimeout(() => { if (listening) try { r.start(); } catch {} }, 300); }
     }
   };
@@ -318,6 +379,7 @@ function createRecognition() {
 
 async function startListening() {
   if (!SR || listening) return;
+  resetRecognitionState();
   recog = createRecognition();
   listening = true;
   try {
